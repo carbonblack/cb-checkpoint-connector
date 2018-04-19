@@ -6,11 +6,11 @@ import time
 import logging
 import os
 import sys
-from checkpoint_api import checkpoint_query
 from cbapi.connection import CbAPISessionAdapter
 from checkpoint_api import APISession
 import json
 import traceback
+from cStringIO import StringIO
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class CheckpointProvider(BinaryAnalysisProvider):
 
     def _call_checkpoint_api(self, method, path, headers, payload=None, files=None):
         url = self.checkpoint_url + path
+        self.session.headers = {}
         self.session.headers.update(headers)
 
         if method == 'GET':
@@ -36,7 +37,7 @@ class CheckpointProvider(BinaryAnalysisProvider):
 
                 r = self.session.get(url, verify=self.checkpoint_ssl_verify)
             except Exception as e:
-                log.exception("Exception when sending checkpoint API GET request: %s" % e)
+                log.error("Exception when sending checkpoint API GET request: %s" % str(e))
                 raise
 
             return r.status_code, r.content
@@ -44,7 +45,7 @@ class CheckpointProvider(BinaryAnalysisProvider):
             try:
                 r = self.session.post(url, data=payload, files=files, verify=self.checkpoint_ssl_verify)
             except Exception as e:
-                log.exception("Exception when sending checkpoint API query: %s" % e)
+                log.error("Exception when sending checkpoint API query: %s" % str(e))
                 # bubble this up as necessary
                 raise
             return r.status_code, r.content
@@ -73,37 +74,50 @@ class CheckpointProvider(BinaryAnalysisProvider):
 
         log.info("Querying checkpoint for md5sum %s" % md5sum)
 
-        status_code, content = self._call_checkpoint_api(method="POST",
-                                                         path="/tecloud/api/v1/file/query",
-                                                         headers=headers,
-                                                         payload=payload)
+        try:
+            status_code, content = self._call_checkpoint_api(method="POST",
+                                                             path="/tecloud/api/v1/file/query",
+                                                             headers=headers,
+                                                             payload=payload,
+                                                             files=None)
 
-        if status_code == 404:
-            return None  # can't find the binary
-        elif status_code != 200:
-            log.info("Received unknown HTTP status code %d from checkpoint" % status_code)
-            log.info("-> response content: %s" % content)
-            raise AnalysisTemporaryError("Received unknown HTTP status code %d from checkpoint" % status_code,
+            if status_code != 200:
+                log.info("Received unknown HTTP status code %d from checkpoint" % status_code)
+                log.info("-> response content: %s" % content)
+                raise AnalysisTemporaryError("Received unknown HTTP status code %d from checkpoint" % status_code,
+                                             retry_in=120)
+        except Exception as e:
+            log.info(str(e))
+            raise AnalysisTemporaryError("There was an error connecting to Checkpoint %s" % str(e),
                                          retry_in=120)
 
         dict_response = json.loads(content)
         try:
-            checkpoint_status_code = dict_response.get("response", [])[0].get("status", {}).get("code", -1)
+            checkpoint_status_code = dict_response.get("response", [])[0].get("te", {}).get("status", {}).get("code",
+                                                                                                              -1)
         except Exception as e:
             checkpoint_status_code = -1
             log.error("Failed to parse checkpoint response JSON")
             log.error(traceback.format_exc())
 
-        log.info(checkpoint_status_code)
-        time.sleep(10)
+        log.info("md5: {0} returned status_code: {1}".format(md5sum,checkpoint_status_code))
+        log.info(content)
 
         if checkpoint_status_code == 1001:
-            #
-            # Found
-            #
-            log.info(content)
-            return None
-            # return AnalysisResult(score=0)
+
+            severity = dict_response.get("response", [])[0].get("te", {}).get("combined_verdict", None)
+
+            if severity.lower() == "malicious":
+                score = 100
+            elif severity.lower() == "unknown":
+                return None
+            elif severity.lower() == "benign":
+                score = 0
+            else:
+                return None
+
+            log.info("{0} has score of {1}".format(md5sum, score))
+            return AnalysisResult(score=score)
 
         elif checkpoint_status_code == 1003:
             #
@@ -144,25 +158,33 @@ class CheckpointProvider(BinaryAnalysisProvider):
         else:
             return None
 
-    def generate_malware_result(self, md5, score):
-        status_code, content = self._call_checkpoint_api("POST", "/publicapi/get/report",
-                                                         {'hash': md5.lower(), "format": "pdf"})
-
-        if status_code == 200:
-            open(os.path.join(self.work_directory, md5.upper()) + ".pdf", 'wb').write(content)
-            return AnalysisResult(score=score, link="/reports/%s.pdf" % md5.upper())
-        else:
-            return AnalysisResult(score=score)
-
     def submit_checkpoint(self, md5sum, file_stream):
         """
         submit a file to the checkpoint api
         returns a checkpoint submission status code
         """
 
-        files = {'file': ('CarbonBlack_%s' % md5sum, file_stream)}
+        headers = {
+            "Authorization": self.api_key,
+        }
+
+        payload = {"request": {
+            "md5": md5sum,
+            "file_name": "CarbonBlack_{0}".format(md5sum)
+        }}
+
+        json_input = StringIO(json.dumps(payload))
+
+        files = {'file': ("CarbonBlack_{0}".format(md5sum), file_stream), 'request': ('request', json_input)}
+
+        log.info("Submitting {0} to Checkpoint Threat Emulation".format(md5sum))
+
         try:
-            status_code, content = self._call_checkpoint_api("POST", "/publicapi/submit/file", files=files)
+            status_code, content = self._call_checkpoint_api("POST",
+                                                             "/tecloud/api/v1/file/upload",
+                                                             headers=headers,
+                                                             payload=None,
+                                                             files=files)
         except Exception as e:
             log.exception("Exception while submitting MD5 %s to checkpoint: %s" % (md5sum, e))
             raise AnalysisTemporaryError("Exception while submitting to checkpoint: %s" % e)
@@ -170,18 +192,20 @@ class CheckpointProvider(BinaryAnalysisProvider):
             if status_code == 200:
                 return True
             else:
+                time.sleep(5)
                 raise AnalysisTemporaryError("Received HTTP error code %d while submitting to checkpoint" % status_code)
 
     def check_result_for(self, md5sum):
-        return self.query_checkpoint(md5sum)
+        return None
+        # return self.query_checkpoint(md5sum)
 
     def analyze_binary(self, md5sum, binary_file_stream):
         self.submit_checkpoint(md5sum, binary_file_stream)
 
-        retries = 20
+        retries = 30
         while retries:
-            time.sleep(30)
-            result = self.check_result_for(md5sum)
+            time.sleep(10)
+            result = self.query_checkpoint(md5sum)
             if result:
                 return result
             retries -= 1
@@ -209,11 +233,11 @@ class CheckpointConnector(DetonationDaemon):
 
     @property
     def num_quick_scan_threads(self):
-        return 1
+        return 0
 
     @property
     def num_deep_scan_threads(self):
-        return 0
+        return 1
 
     def get_provider(self):
         checkpoint_provider = CheckpointProvider(self.name,
@@ -224,11 +248,12 @@ class CheckpointConnector(DetonationDaemon):
         return checkpoint_provider
 
     def get_metadata(self):
-        return cbint.utils.feed.generate_feed(self.name, summary="Checkpoint cloud binary feed",
+        return cbint.utils.feed.generate_feed(self.name,
+                                              summary="Checkpoint cloud binary feed",
                                               tech_data=(
-                                                  "There are no requirements to share any data with Carbon Black to use this feed. "
-                                                  "However, binaries may be shared with Palo Alto."),
-                                              provider_url="http://checkpoint.paloaltonetworks.com/",
+                                                  "There are no requirements to share any data with Carbon Black"
+                                                  "to use this feed. However, binaries may be shared with Checkpoint."),
+                                              provider_url="http://www.checkpoint.com/",
                                               icon_path='/usr/share/cb/integrations/checkpoint/checkpoint-logo.png',
                                               display_name="checkpoint", category="Connectors")
 
@@ -237,14 +262,14 @@ class CheckpointConnector(DetonationDaemon):
 
         self.api_key = self.get_config_string("checkpoint_api_key", None)
         if not self.api_key:
-            raise ConfigurationError("checkpoint API key must be specified in the checkpoint_api_key option")
+            raise ConfigurationError("Checkpoint API key must be specified in the checkpoint_api_key option")
 
-        checkpoint_url = self.get_config_string("checkpoint_url", "https://checkpoint.paloaltonetworks.com")
+        checkpoint_url = self.get_config_string("checkpoint_url", "https://te.checkpoint.com")
         self.checkpoint_url = checkpoint_url.rstrip("/")
 
-        self.checkpoint_ssl_verify = self.get_config_boolean("checkpoint_verify_ssl", True)
+        self.checkpoint_ssl_verify = True
 
-        log.info("connecting to checkpoint server at %s with API key %s" % (self.checkpoint_url, self.api_key))
+        log.debug("connecting to checkpoint server at %s with API key %s" % (self.checkpoint_url, self.api_key))
 
         return True
 
@@ -257,7 +282,7 @@ if __name__ == '__main__':
     my_path = os.path.dirname(os.path.abspath(__file__))
     temp_directory = "/tmp/checkpoint"
 
-    #/private/tmp/checkpoint/sqlite.db
+    # /private/tmp/checkpoint/sqlite.db
 
     config_path = "testing.conf"
     daemon = CheckpointConnector('checkpointtest',
