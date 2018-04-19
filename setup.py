@@ -37,6 +37,8 @@ class bdist_binaryrpm(bdist_rpm):
 """This install_cb plugin will install all data files associated with the
 tool as well as the pyinstaller-compiled single binary scripts so that
 they can be packaged together in a binary RPM."""
+
+
 class install_cb(Command):
     description = "install binary distribution files"
 
@@ -49,7 +51,7 @@ class install_cb(Command):
         ('force', 'f', "force installation (overwrite existing files)"),
         ('record=', None,
          "filename in which to record list of installed files"),
-        ]
+    ]
 
     boolean_options = ['force']
 
@@ -67,7 +69,7 @@ class install_cb(Command):
                                    ('install_data', 'install_dir'),
                                    ('root', 'root'),
                                    ('force', 'force'),
-                                  )
+                                   )
 
     def run(self):
         for f in self.data_files:
@@ -108,7 +110,7 @@ class install_cb(Command):
 
         if self.record:
             outputs = self.get_outputs()
-            if self.root:               # strip any package prefix
+            if self.root:  # strip any package prefix
                 root_len = len(self.root)
                 for counter in xrange(len(outputs)):
                     outputs[counter] = outputs[counter][root_len:]
@@ -136,6 +138,7 @@ def get_data_files(rootdir):
 
     return results
 
+
 data_files = get_data_files("root")
 data_files.append('cb-checkpoint-connector.spec')
 data_files.append('scripts/cb-checkpoint-connector')
@@ -148,14 +151,14 @@ scripts = {
 
 setup(
     name='python-cb-checkpoint-connector',
-    version='2.5',
+    version='1.0',
     packages=['cbopensource', 'cbopensource.connectors', 'cbopensource.connectors.checkpoint'],
     url='https://github.com/carbonblack/cb-checkpoint-connector',
     license='MIT',
-    author='Bit9 + Carbon Black Developer Network',
-    author_email='dev-support@bit9.com',
+    author='Carbon Black Developer Network',
+    author_email='dev-support@carbonblack.com',
     description=
-        'Connector between Carbon Black and checkpoint',
+    'Connector between Carbon Black and Checkpoint Threat Emulation',
     data_files=data_files,
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -164,7 +167,7 @@ setup(
         'Intended Audience :: Developers',
 
         # Pick your license as you wish (should match "license" above)
-         'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: MIT License',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
