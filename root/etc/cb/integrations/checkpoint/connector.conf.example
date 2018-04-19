@@ -1,0 +1,59 @@
+[bridge]
+
+;
+; core configuration options
+;
+
+;
+; listener_port
+; port to listen for incoming feed requests
+;
+listener_port=3775
+
+;
+; feed_host
+; the IP address of this machine for Cb to contact with feed requests
+;
+feed_host=127.0.0.1
+
+;
+; listener_address
+; ipv4 address to listen; defaults to 127.0.0.1
+; 0.0.0.0 binds to all interfaces
+;
+listener_address=0.0.0.0
+
+; checkpoint_api_key
+; API key provided by Checkpoint
+checkpoint_api_key=
+
+; checkpoint_url
+; URL for the checkpoint cloud service.
+;
+; Default: https://te.checkpoint.com
+checkpoint_url=https://te.checkpoint.com
+
+;
+; Carbon Black Enterprise Server options
+;
+
+;
+; Carbon Black Enterprise Server URL
+;
+carbonblack_server_url=https://127.0.0.1
+
+;
+; Carbon Black Enterprise Server API Token
+;
+carbonblack_server_token=
+
+;
+; Carbon Black Enterprise Server SSL Verfication
+;
+carbonblack_server_sslverify=1
+
+;
+; binary_filter_query
+; Additional query options to filter only binaries of interest to the checkpoint connector
+;
+binary_filter_query=is_executable_image:true -(digsig_publisher:"Microsoft Corporation" and digsig_result:"Signed")

@@ -233,7 +233,7 @@ class CheckpointConnector(DetonationDaemon):
 
     @property
     def num_quick_scan_threads(self):
-        return 0
+        return 1
 
     @property
     def num_deep_scan_threads(self):
