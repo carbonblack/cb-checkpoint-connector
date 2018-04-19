@@ -101,7 +101,6 @@ class CheckpointProvider(BinaryAnalysisProvider):
             log.error(traceback.format_exc())
 
         log.info("md5: {0} returned status_code: {1}".format(md5sum,checkpoint_status_code))
-        log.info(content)
 
         if checkpoint_status_code == 1001:
 
