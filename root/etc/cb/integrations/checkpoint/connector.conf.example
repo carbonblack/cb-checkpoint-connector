@@ -21,7 +21,7 @@ feed_host=127.0.0.1
 ; ipv4 address to listen; defaults to 127.0.0.1
 ; 0.0.0.0 binds to all interfaces
 ;
-listener_address=0.0.0.0
+listener_address=127.0.0.1
 
 ; checkpoint_api_key
 ; API key provided by Checkpoint
