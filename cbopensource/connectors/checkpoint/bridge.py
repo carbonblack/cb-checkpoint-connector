@@ -228,7 +228,7 @@ class CheckpointConnector(DetonationDaemon):
 
     @property
     def integration_name(self):
-        return 'Cb Checkpoint Connector 1.0.0'
+        return 'Cb Checkpoint Connector 1.0.2'
 
     @property
     def num_quick_scan_threads(self):
