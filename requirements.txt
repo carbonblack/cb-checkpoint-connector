@@ -13,7 +13,7 @@ future==0.16.0
 futures==3.2.0
 idna==2.6
 itsdangerous==0.24
-Jinja2==2.10
+Jinja2==2.11.3
 macholib==1.9
 MarkupSafe==1.0
 netifaces==0.10.6
