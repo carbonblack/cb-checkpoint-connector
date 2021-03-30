@@ -21,7 +21,7 @@ pefile==2017.11.5
 pika==0.11.2
 prompt-toolkit==1.0.15
 protobuf==3.5.2.post1
-Pygments==2.2.0
+Pygments==2.7.4
 PyInstaller==3.6
 python-dateutil==2.7.2
 PyYAML==5.4
